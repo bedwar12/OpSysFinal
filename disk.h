@@ -1,4 +1,16 @@
-using namespace std; 
+#ifndef DISK_H_
+#define DISK_H_
+
+#include <iostream>
+#include <fstream>
+#include <cstdlib>
+#include <cstring>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+#include <cstdlib>
+#include <map>
+using namespace std;
 
 class Disk {
   public:
@@ -17,4 +29,4 @@ class Disk {
     int getBlockCount() {return (blkCount);};
 };
 
-
+#endif
