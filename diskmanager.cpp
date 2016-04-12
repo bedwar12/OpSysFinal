@@ -14,6 +14,8 @@ DiskManager::DiskManager(Disk *d, int partcount, DiskPartition *dp)
   diskP = new DiskPartition[partCount];
   /* else  read back the partition information from the DISK1 */
 
+  //This is a test
+
 }
 
 /*
