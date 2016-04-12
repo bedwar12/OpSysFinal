@@ -4,6 +4,7 @@
 #include <iostream>
 using namespace std;
 
+//BitVector name :freeSpace
 
 PartitionManager::PartitionManager(DiskManager *dm, char partitionname, int partitionsize)
 {
@@ -46,7 +47,7 @@ int PartitionManager::writeDiskBlock(int blknum, char *blkdata)
   return myDM->writeDiskBlock(myPartitionName, blknum, blkdata);
 }
 
-int PartitionManager::getBlockSize() 
+int PartitionManager::getBlockSize()
 {
   return myDM->getBlockSize();
 }
