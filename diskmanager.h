@@ -1,3 +1,8 @@
+#ifndef DISKMANAGER_H_
+#define DISKMANAGER_H_
+
+#include "disk.h"
+
 using namespace std;
 
 class DiskPartition {
@@ -9,7 +14,7 @@ class DiskPartition {
 class DiskManager {
   Disk *myDisk;
   int partCount;
-  DiskPartition *diskP;
+  DiskPartition *diskPart;
 
   /* declare other private members here */
 
@@ -22,3 +27,4 @@ class DiskManager {
     int getPartitionSize(char partitionname);
 };
 
+#endif
