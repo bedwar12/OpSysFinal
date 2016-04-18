@@ -8,6 +8,10 @@
 using namespace std;
 
 
+//Mike: Unlock and Lock
+//Luke: ReadFile and WriteFile
+//Kyle: Seek and Create
+
 
 FileSystem::FileSystem(DiskManager *dm, char fileSystemName)
 {
