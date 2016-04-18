@@ -1,5 +1,6 @@
 class PartitionManager {
   DiskManager *myDM;
+  BitVector *freeSpace;
 
 
   public:
@@ -13,4 +14,3 @@ class PartitionManager {
     int getFreeDiskBlock();
     int returnDiskBlock(int blknum);
 };
-

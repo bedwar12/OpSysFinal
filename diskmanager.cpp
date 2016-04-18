@@ -90,15 +90,19 @@ int DiskManager::readDiskBlock(char partitionname, int blknum, char *blkdata)
  */
 int DiskManager::writeDiskBlock(char partitionname, int blknum, char *blkdata)
 {
-  /* write the code for writing a disk block to a partition */
-
-  if(diskPart[blknum] == partitionname){
-    return myDisk -> writeDiskBlock(blknum, blkdata);
+  /* write the code for reading a disk block from a partition */
+  int offset = 1;
+  int index = 0;
+  while(diskPart[index].partitionName != partitionname)
+  {
+    offset = offset + diskPart[index].partitionSize;
+    index ++;
+    if (index > partCount)
+    {
+      return -3;
+    }
   }
-  else {
-    cout << "partition not found \n";
-    return -3;
-  }
+  return (myDisk -> writeDiskBlock(offset + blknum, blkdata));
 }
 
 /*
