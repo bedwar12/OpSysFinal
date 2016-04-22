@@ -3,8 +3,9 @@ class FileSystem {
   PartitionManager *myPM;
   char myfileSystemName;
   int myfileSystemSize;
-  
+
   /* declare other private members here */
+  //Bang your head against this file
 
   public:
     FileSystem(DiskManager *dm, char fileSystemName);
