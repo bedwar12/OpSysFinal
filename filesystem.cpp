@@ -8,7 +8,7 @@
 using namespace std;
 
 
-//Mike: Unlock and Lock
+//Mike: Work on createFile and openFile
 //Luke: ReadFile and WriteFile
 //Kyle: Seek and Create
 
