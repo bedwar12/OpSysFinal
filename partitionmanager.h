@@ -1,3 +1,10 @@
+#ifndef PARTITIONMANAGER_H_
+#define PARTITIONMANAGER_H_
+
+#include "diskmanager.h"
+#include "bitvector.h"
+using namespace std;
+
 class PartitionManager {
   DiskManager *myDM;
   BitVector *freeSpace;
@@ -14,3 +21,5 @@ class PartitionManager {
     int getFreeDiskBlock();
     int returnDiskBlock(int blknum);
 };
+
+#endif

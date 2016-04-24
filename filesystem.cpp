@@ -8,14 +8,45 @@
 using namespace std;
 
 
-//Mike: Work on createFile and openFile
+//Mike: deleteFile and deleteDirectory
 //Luke: ReadFile and WriteFile
-//Kyle: Seek and Create
+//Kyle: Seek and CreateDir
 
 
 FileSystem::FileSystem(DiskManager *dm, char fileSystemName)
 {
+	char *str;
+	myDM = dm;
+	myfileSystemName = fileSystemName;
+	myfileSystemSize = myDM->getPartitionSize(myfileSystemName);
+	char buffer[65] = "";
+	myPM = new PartitionManager(myDM, myfileSystemName, myfileSystemSize);
 
+	// Create the root directory
+	myDI = new dinode();
+	myDI->name[0] = fileSystemName;
+	myDI->point[0][0] = '-';
+	myDI->type[0] = 'd';
+	myDI->writeBlock(1, myPM);
+
+	for (int i = 0; i < 100; i++)
+	{
+		memset(openNames[i], 0, 64);
+	}
+	memset(myMode, 0, 100);
+	memset(fdesc, -1, 100);
+	memset(rwptr, -1, 100);
+}
+
+FileSystem::~FileSystem()
+{
+	free(myMode);
+	for(int i = 0; i < 100; i++)
+	{
+		free(openNames[i]);
+	}
+	free(fdesc);
+	free(rwptr);
 }
 int FileSystem::createFile(char *filename, int fnameLen)
 {
@@ -125,10 +156,12 @@ int FileSystem::createFile(char *filename, int fnameLen)
 			curDI = curDI->createdinode(nextDI);
 		}
 	}
+	return 0;
 }
 int FileSystem::createDirectory(char *dirname, int dnameLen)
 {
 
+	return 0;
 }
 int FileSystem::lockFile(char *filename, int fnameLen)
 {
@@ -190,11 +223,11 @@ int FileSystem::unlockFile(char *filename, int fnameLen, int lockId)
 }
 int FileSystem::deleteFile(char *filename, int fnameLen)
 {
-
+	return 0;
 }
 int FileSystem::deleteDirectory(char *dirname, int dnameLen)
 {
-
+	return 0;
 }
 int FileSystem::openFile(char *filename, int fnameLen, char mode, int lockId)
 {
@@ -267,7 +300,7 @@ int FileSystem::openFile(char *filename, int fnameLen, char mode, int lockId)
 }
 int FileSystem::closeFile(int fileDesc)
 {
-
+	return 0;
 }
 int FileSystem::readFile(int fileDesc, char *data, int len)
 {
@@ -280,21 +313,21 @@ int FileSystem::writeFile(int fileDesc, char *data, int len)
 }
 int FileSystem::appendFile(int fileDesc, char *data, int len)
 {
-
+	return 0;
 }
 int FileSystem::seekFile(int fileDesc, int offset, int flag)
 {
-
+	return 0;
 }
 int FileSystem::renameFile(char *filename1, int fnameLen1, char *filename2, int fnameLen2)
 {
-
+	return 0;
 }
 int FileSystem::getAttribute(char *filename, int fnameLen /* ... and other parameters as needed */)
 {
-
+	return 0;
 }
 int setAttribute(char *filename, int fnameLen /* ... and other parameters as needed */)
 {
-
+	return 0;
 }
