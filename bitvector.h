@@ -1,3 +1,7 @@
+#ifndef BITVECTOR_H_
+#define BITVECTOR_H_
+
+
 enum {OFF,ON};
 
 typedef unsigned int BitVecType;
@@ -20,3 +24,5 @@ class BitVector {
     void setBitVector(unsigned int *nbv); /* initializes a bit vector */
     void getBitVector(unsigned int *nbv); /* retrieves a bit vector */
 };
+
+#endif

@@ -22,7 +22,7 @@ PartitionManager::PartitionManager(DiskManager *dm, char partitionname, int part
   if(buffer[0] != 'c')
   {
   	// create bitvector from stored data
-  	freeSpace -> setBitVector((insigned in*) buffer);
+  	freeSpace -> setBitVector((unsigned int*) buffer);
   }
   else
   {
@@ -82,9 +82,9 @@ int PartitionManager::returnDiskBlock(int blknum)
   // else, free the allocated block
   else{
     // create "blank" buffer filled with 'c'
-    char blankBuffer[64];
+    char buffer[64];
     for (int i = 0; i < 64; i++){
-        blankBuffer[i] = 'c';
+        buffer[i] = 'c';
     }
     // write blank buffer to disk
     myDM->writeDiskBlock(myPartitionName,blknum, buffer);
