@@ -114,7 +114,7 @@ int DiskManager::getPartitionSize(char partitionname)
   /* write the code for returning partition size */
 	int index = 0;
 	//get the proper index
-	while( diskPart[ index ].partitionName != partName )
+	while( diskPart[ index ].partitionName != partitionname )
 	{
 		// if # of partitions is exceeded exit function
 		if ( index > partCount )
