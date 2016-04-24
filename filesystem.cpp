@@ -8,14 +8,45 @@
 using namespace std;
 
 
-//Mike: Work on createFile and openFile
+//Mike: Constructor and Destructor
 //Luke: ReadFile and WriteFile
-//Kyle: Seek and Create
+//Kyle: Seek and CreateDir
 
 
 FileSystem::FileSystem(DiskManager *dm, char fileSystemName)
 {
+	char *str;
+	myDM = dm;
+	myfileSystemName = fileSystemName;
+	myfileSystemSize = myDM->getPartitionSize(myfileSystemName);
+	char buffer[65] = "";
+	myPM = new PartitionManager(myDM, myfileSystemName, myfileSystemSize);
 
+	// Create the root directory
+	myDI = new dinode();
+	myDI->name[0] = fileSystemName;
+	myDI->point[0][0] = '-';
+	myDI->type[0] = 'd';
+	myDI->writeBlock(1, myPM);
+
+	for (int i = 0; i < 100; i++)
+	{
+		memset(openNames[i], 0, 64);
+	}
+	memset(myMode, 0, 100);
+	memset(fdesc, -1, 100);
+	memset(rwptr, -1, 100);
+}
+
+FileSystem::~FileSystem()
+{
+	free(myMode);
+	for(int i = 0; i < 100; i++)
+	{
+		free(openNames[i]);
+	}
+	free(fdesc);
+	free(rwptr);
 }
 int FileSystem::createFile(char *filename, int fnameLen)
 {
