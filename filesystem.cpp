@@ -9,8 +9,8 @@ using namespace std;
 
 
 //Mike: deleteFile and deleteDirectory
-//Luke: ReadFile and WriteFile
-//Kyle: Seek and CreateDir
+//Luke: ReadFile and WriteFile and appendFile
+//Kyle: CloseFile and RenameFile
 
 
 FileSystem::FileSystem(DiskManager *dm, char fileSystemName)
@@ -458,4 +458,66 @@ int FileSystem::getAttribute(char *filename, int fnameLen /* ... and other param
 int setAttribute(char *filename, int fnameLen /* ... and other parameters as needed */)
 {
 	return 0;
+}
+
+int File:System::isOpen ( int fileDesc )
+{
+	for ( int i = 0; i < 100; i++ )
+	{
+		if ( fdesc[i] == fileDesc )
+		{
+			return i;
+		}
+	}
+	return -1;
+}
+
+int FileSystem::findBlockNum(char* path, int &curAddr, int &newAddr)
+{
+	char curPath;
+	curAddr = 1;
+	newAddr = 1;
+	int i = 1;
+	dinode *curDI = myDI;
+	char nextDI[65];
+
+	while(true)
+	{
+		if(isalpha(path[i]))
+		{
+			curPath = path[i];
+		}
+		else
+		{
+			return 0;
+		}
+		for(int b = 0; b < 10; b++)
+		{
+			//if exists
+	      	if (curDI->name[b] == curPath && curDI->type[b] != 'c')
+			{
+				curAddr = newAddr;
+				newAddr = atoi(curDI->point[b]);
+				break;
+			}
+	    }
+
+		if(curAddr != newAddr)
+		{
+			myPM->readDiskBlock(newAddr, nextDI);
+			curDI = curDI->createdinode(nextDI);
+		}
+		else if(curDI->next[0] == 'c')
+		{
+			return -1;
+		}
+		else
+		{
+			newAddr = atoi(curDI->next);
+			curAddr = newAddr;
+			myPM->readDiskBlock(curAddr, nextDI);
+			curDI = curDI->createdinode(nextDI);
+		}
+		i+=2;
+	}
 }
