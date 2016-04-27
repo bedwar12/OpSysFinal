@@ -160,8 +160,107 @@ int FileSystem::createFile(char *filename, int fnameLen)
 }
 int FileSystem::createDirectory(char *dirname, int dnameLen)
 {
+	// check if name is valid
 
-	return 0;
+	if(!validName(dirname, dnameLen))
+	{
+		return -3;
+	}
+
+	dinode *curDI;
+	// get free disk block
+	char prefix[256];
+	char buffer[65];
+	bool success = false;
+		int fdb;
+	int result, par, child;
+
+	result = doesExist(dirname);
+	if(result == (-1))
+	{
+		return -1;
+	}
+
+		if((fdb = myPM->getFreeDiskBlock()) == (-1))
+		{
+			return (-2);
+		}
+	strncpy(prefix, dirname, (dnameLen-2));
+	result = findBlockNum(prefix, par, child);
+	if(result == (-1))
+	{
+		return(-3);
+	}
+
+	// Look in block #child to find empty entry for new directory
+	curDI = myDI;
+	myPM->readDiskBlock(child, buffer);
+	if(child == 1)
+	{
+		curDI = myDI;
+	}
+	else
+	{
+		curDI = curDI->createdinode(buffer);
+	}
+	while(true)
+	{
+		// find an empty spot to put directory entry
+		for(int i = 0; i < 10; i++)
+		{
+			// free if name is 'c'
+				if (curDI->name[i] == 'c')
+				{
+					curDI->name[i] = dirname[dnameLen-1];
+				char myfdb[5];
+					sprintf(myfdb, "%04d", fdb);
+				for(int l = 0; l < 5; l++)
+				{
+					curDI->point[i][l] = myfdb[l];
+				}
+					curDI->type[i] = 'd';
+					success = true;
+					break;
+				}
+		}
+
+		if(success == true)
+		{
+			curDI->writeBlock(child, myPM);
+				break;
+		}
+
+		// if a spot wasn't located, check if next is set, if not then create it
+				if(curDI->next[0] == 'c')
+		{
+			// use the free disk block to allocate ptr for next dinode
+				sprintf(curDI->next, "%04d", fdb);
+			result = curDI->writeBlock(child, myPM);
+			// dinode created to extend next pointer
+				dinode *newDI = new dinode();
+				newDI->name[0] = dirname[dnameLen -1];
+				newDI->type[0] = 'd';
+
+			// get another free disk block for the dinode we create
+				int fdb2;
+					if((fdb2 = myPM->getFreeDiskBlock()) == (-1))
+			{
+					return (-2);
+			}
+
+					sprintf(newDI->point[0], "%04d", fdb2);
+					newDI->writeBlock(fdb, myPM);
+			return 0;
+		}
+		else
+		{
+			// next has a value, get it and go to that directory
+			child = atoi(curDI->next);
+			char nextDI[65];
+			myPM->readDiskBlock(child, nextDI);
+			curDI = curDI->createdinode(nextDI);
+		}
+	}
 }
 int FileSystem::lockFile(char *filename, int fnameLen)
 {
@@ -317,7 +416,36 @@ int FileSystem::appendFile(int fileDesc, char *data, int len)
 }
 int FileSystem::seekFile(int fileDesc, int offset, int flag)
 {
-	return 0;
+	int index = isOpen( fileDesc );
+	if( index == -1 )
+		return -1; // file isn't open
+
+	// find desired rw
+	int rw;
+	if( flag = 0 )
+	{
+		rw = rwptr[index] + offset;
+	}
+	else
+	{
+		rw = offset;
+	}
+
+	// get file size and check for overflow before setting
+	int par, child;
+	char buffer[65];
+	int result = findBlockNum( openNames[index], par, child );
+	myPM->readDiskBlock( child, buffer );
+	finode* myFile = new finode();
+	myFile = myFile->createfinode( buffer );
+	int size = atoi( myFile->size );
+	if( rw > 0 && rw + offset < size )
+	{
+		rwptr[index] = rw;
+		return 0; // success
+	}
+	else
+		return -2; // overflow attempt
 }
 int FileSystem::renameFile(char *filename1, int fnameLen1, char *filename2, int fnameLen2)
 {
