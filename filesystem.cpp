@@ -322,11 +322,136 @@ int FileSystem::unlockFile(char *filename, int fnameLen, int lockId)
 }
 int FileSystem::deleteFile(char *filename, int fnameLen)
 {
-	return 0;
+	// check name validation
+	if(!validName(filename, fnameLen))
+	{
+		return -1;
+	}
+
+	// check if locked
+	if(isLocked(filename))
+	{
+		return -2;
+	}
+
+	// check if open
+	for(int l = 0; l < 100; l++)
+	{
+		if(strcmp(openNames[l], filename) == 0)
+		{
+			return -2;
+		}
+	}
+
+	int r, parAddr, addr;
+	r = findBlockNum(filename, parAddr, addr);
+	if(r == -1)
+	{
+		return -1;
+	}
+
+	char buffer[65];
+	int next;
+	finode *myFI = new finode();
+	dinode *curDI = myDI;
+	myPM->readDiskBlock(addr, buffer);
+	myFI->createfinode(buffer);
+	// if indirect
+	if(myFI->indirect[0] != 'c')
+	{
+		next = atoi(myFI->indirect);
+		deleteIInode(next);
+		myPM->returnDiskBlock(next);
+	}
+	for(int i = 0; i < 3; i++)
+	{
+		if(myFI->direct[i][0] != 'c')
+		{
+			next = atoi(myFI->direct[i]);
+			myPM->returnDiskBlock(next);
+		}
+	}
+	myPM->returnDiskBlock(addr);
+	if(parAddr == 1)
+	{
+		curDI = myDI;
+	}
+	else
+	{
+		myPM->readDiskBlock(parAddr, buffer);
+		curDI = curDI->createdinode(buffer);
+	}
+	for(int j = 0; j < 10; j++)
+	{
+		if(curDI->name[j] == filename[fnameLen-1] && curDI->type[j] == 'f')
+		{
+			curDI->name[j] = 'c';
+			curDI->type[j] = 'c';
+			for(int v = 0; v < 4; v++)
+			{
+				curDI->point[j][v] = 'c';
+			}
+		}
+	}
+	curDI->writeBlock(parAddr, myPM);
 }
 int FileSystem::deleteDirectory(char *dirname, int dnameLen)
 {
-	return 0;
+	// check if name is valid
+
+	if(!validName(dirname, dnameLen))
+	{
+		return -3;
+	}
+
+	int r, addr, parAddr;
+	char pathname[256];
+	r = findBlockNum(dirname, parAddr, addr);
+
+	if (r == -1)
+	{
+		return -1;
+	}
+	char buf[65];
+	myPM->readDiskBlock(addr, buf);
+	dinode* CurDI = myDI;
+	CurDI = CurDI->createdinode(buf);
+	if(CurDI->next[0] != 'c')
+	{
+		return -2;
+	}
+	for (int i = 0; i < 10; i++)
+	{
+		if(CurDI->name[i] != 'c' || CurDI->type[i] != 'c')
+		{
+			return -2;
+		}
+	}
+
+	myPM->returnDiskBlock(addr);
+	if(parAddr == 1)
+	{
+		printf("%s\n", "Looking at myDI");
+		CurDI = myDI;
+	}
+	else
+	{
+		myPM->readDiskBlock(parAddr, buf);
+		CurDI = CurDI->createdinode(buf);
+	}
+	for(int j = 0; j < 10; j++)
+	{
+		if(CurDI->name[j] == dirname[dnameLen-1])
+		{
+			CurDI->name[j] = 'c';
+			CurDI->type[j] = 'c';
+			for(int v = 0; v < 4; v++)
+			{
+				CurDI->point[j][v] = 'c';
+			}
+		}
+	}
+	CurDI->writeBlock(parAddr, myPM);
 }
 int FileSystem::openFile(char *filename, int fnameLen, char mode, int lockId)
 {
