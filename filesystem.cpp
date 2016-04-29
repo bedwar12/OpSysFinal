@@ -8,8 +8,8 @@
 using namespace std;
 
 
-//Mike: deleteFile and deleteDirectory
-//Luke: ReadFile and WriteFile and appendFile
+//Mike:
+//Luke: ReadFile and appendFile
 //Kyle: CloseFile and RenameFile
 
 
@@ -533,7 +533,113 @@ int FileSystem::readFile(int fileDesc, char *data, int len)
 int FileSystem::writeFile(int fileDesc, char *data, int len)
 {
 
-  return 0;
+	// error checks
+int index = isOpen( fileDesc );
+if( index == -1 )
+{
+	return -1; // file isn't open
+}
+if( len < 0 )
+{
+	return -2; //negative length
+	}
+
+// get file size and check for overflow before setting
+int rw = rwptr[index];
+bool inFinode = true;
+int par, child, finder = rw, currentBlock, index;
+char buffer[64];
+int result = findBlockNum( openNames[index], par, child );
+myPM->readDiskBlock( child, buffer );
+finode* myFile = new finode();
+myFile = myFile->createfinode( buffer );
+int size = atoi( myFile->size );
+
+// find the current block
+// check if rw is in a direct block
+if(finder < 3*64)
+	{
+			currentBlock = rw / 64;
+
+			// read currentBlock into buffer
+			myPm->readBlock(myFile->direct[currentBlock],buffer);
+	}
+	else // we have to read in an inode and rw is somewhere in it
+	{
+			// new we are in the iinode
+			// set finder
+			finder -= (3*64);
+
+			// create inode
+			myPM -> readDiskBlock(myFile->indirect);
+			iinode* myIinode = new iinode();
+			myIinode0 = myIinode0->createiinode(buffer);
+
+			//set currentBlock
+			currentBlock = (finder / 64) + 3;
+
+			// read currentBlock into buffer
+			myPm->readBlock(atoi(myIinode0->addr[currentBlock]),buffer);
+	}
+
+	// start writing
+
+	index = rw % 64;
+	int dataIndex = 0;
+
+	// write the rest of currentBlock
+	while(index < 64 && rw < len){
+			buffer[index] = data[dataIndex];
+			myPM->writeBlock(atoi(myIinode->addr[currentBlock]),buffer);
+			index++;
+			dataIndex++;
+			rw++;
+			currentBlock++;
+	}
+
+	if(rw < 3*64) // still in the finode direct blocks
+	{
+			while(rw < 3*64)
+			{
+					strncpy(buffer, data+dataIndex, 64);
+					myPm->writeBlock(atoi(myIinode->addr[currentBlock]),buffer);
+					dataIndex+=64;
+					rw+=64;
+					currentBlock++;
+			}
+	}
+	else// rw > 3*64, we are in the inode
+	{
+			if(rw >= (3*64) + (16*64))
+			{
+					// file is too long
+			}
+
+			// if bytes left to write is > 64, we can write block by block
+			while(len - rw > 64)
+			{
+					strncpy(buffer, data+dataIndex, 64);
+					myPm->writeBlock(atoi(myIinode->addr[currentBlock]),buffer);
+					dataIndex+=64;
+					rw+=64;
+					currentBlock++;
+			}
+
+			// reset index for new currentBlock
+			index = rw % 64;
+
+			// write the rest of currentBlock
+			while(index < 64 && rw < len)
+			{
+					buffer[index] = data[dataIndex];
+					myPM->writeBlock(atoi(myIinode->addr[currentBlock]),buffer);
+					index++;
+					dataIndex++;
+					rw++;
+					currentBlock++;
+			}
+	}
+return 0;
 }
 int FileSystem::appendFile(int fileDesc, char *data, int len)
 {
