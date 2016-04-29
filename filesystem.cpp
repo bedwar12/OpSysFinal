@@ -8,8 +8,8 @@
 using namespace std;
 
 
-//Mike:
-//Luke: ReadFile and appendFile
+//Mike: getAttribute and setAttribute
+//Luke: ReadFile and appendFile and some changes to writeFile
 //Kyle: CloseFile and RenameFile
 
 
