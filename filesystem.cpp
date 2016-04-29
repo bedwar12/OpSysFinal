@@ -9,8 +9,8 @@ using namespace std;
 
 
 //Mike: deleteFile and deleteDirectory
-//Luke: ReadFile and WriteFile
-//Kyle: Seek and CreateDir
+//Luke: ReadFile and WriteFile and appendFile
+//Kyle: CloseFile and RenameFile
 
 
 FileSystem::FileSystem(DiskManager *dm, char fileSystemName)
@@ -160,8 +160,107 @@ int FileSystem::createFile(char *filename, int fnameLen)
 }
 int FileSystem::createDirectory(char *dirname, int dnameLen)
 {
+	// check if name is valid
 
-	return 0;
+	if(!validName(dirname, dnameLen))
+	{
+		return -3;
+	}
+
+	dinode *curDI;
+	// get free disk block
+	char prefix[256];
+	char buffer[65];
+	bool success = false;
+		int fdb;
+	int result, par, child;
+
+	result = doesExist(dirname);
+	if(result == (-1))
+	{
+		return -1;
+	}
+
+		if((fdb = myPM->getFreeDiskBlock()) == (-1))
+		{
+			return (-2);
+		}
+	strncpy(prefix, dirname, (dnameLen-2));
+	result = findBlockNum(prefix, par, child);
+	if(result == (-1))
+	{
+		return(-3);
+	}
+
+	// Look in block #child to find empty entry for new directory
+	curDI = myDI;
+	myPM->readDiskBlock(child, buffer);
+	if(child == 1)
+	{
+		curDI = myDI;
+	}
+	else
+	{
+		curDI = curDI->createdinode(buffer);
+	}
+	while(true)
+	{
+		// find an empty spot to put directory entry
+		for(int i = 0; i < 10; i++)
+		{
+			// free if name is 'c'
+				if (curDI->name[i] == 'c')
+				{
+					curDI->name[i] = dirname[dnameLen-1];
+				char myfdb[5];
+					sprintf(myfdb, "%04d", fdb);
+				for(int l = 0; l < 5; l++)
+				{
+					curDI->point[i][l] = myfdb[l];
+				}
+					curDI->type[i] = 'd';
+					success = true;
+					break;
+				}
+		}
+
+		if(success == true)
+		{
+			curDI->writeBlock(child, myPM);
+				break;
+		}
+
+		// if a spot wasn't located, check if next is set, if not then create it
+				if(curDI->next[0] == 'c')
+		{
+			// use the free disk block to allocate ptr for next dinode
+				sprintf(curDI->next, "%04d", fdb);
+			result = curDI->writeBlock(child, myPM);
+			// dinode created to extend next pointer
+				dinode *newDI = new dinode();
+				newDI->name[0] = dirname[dnameLen -1];
+				newDI->type[0] = 'd';
+
+			// get another free disk block for the dinode we create
+				int fdb2;
+					if((fdb2 = myPM->getFreeDiskBlock()) == (-1))
+			{
+					return (-2);
+			}
+
+					sprintf(newDI->point[0], "%04d", fdb2);
+					newDI->writeBlock(fdb, myPM);
+			return 0;
+		}
+		else
+		{
+			// next has a value, get it and go to that directory
+			child = atoi(curDI->next);
+			char nextDI[65];
+			myPM->readDiskBlock(child, nextDI);
+			curDI = curDI->createdinode(nextDI);
+		}
+	}
 }
 int FileSystem::lockFile(char *filename, int fnameLen)
 {
@@ -223,11 +322,136 @@ int FileSystem::unlockFile(char *filename, int fnameLen, int lockId)
 }
 int FileSystem::deleteFile(char *filename, int fnameLen)
 {
-	return 0;
+	// check name validation
+	if(!validName(filename, fnameLen))
+	{
+		return -1;
+	}
+
+	// check if locked
+	if(isLocked(filename))
+	{
+		return -2;
+	}
+
+	// check if open
+	for(int l = 0; l < 100; l++)
+	{
+		if(strcmp(openNames[l], filename) == 0)
+		{
+			return -2;
+		}
+	}
+
+	int r, parAddr, addr;
+	r = findBlockNum(filename, parAddr, addr);
+	if(r == -1)
+	{
+		return -1;
+	}
+
+	char buffer[65];
+	int next;
+	finode *myFI = new finode();
+	dinode *curDI = myDI;
+	myPM->readDiskBlock(addr, buffer);
+	myFI->createfinode(buffer);
+	// if indirect
+	if(myFI->indirect[0] != 'c')
+	{
+		next = atoi(myFI->indirect);
+		deleteIInode(next);
+		myPM->returnDiskBlock(next);
+	}
+	for(int i = 0; i < 3; i++)
+	{
+		if(myFI->direct[i][0] != 'c')
+		{
+			next = atoi(myFI->direct[i]);
+			myPM->returnDiskBlock(next);
+		}
+	}
+	myPM->returnDiskBlock(addr);
+	if(parAddr == 1)
+	{
+		curDI = myDI;
+	}
+	else
+	{
+		myPM->readDiskBlock(parAddr, buffer);
+		curDI = curDI->createdinode(buffer);
+	}
+	for(int j = 0; j < 10; j++)
+	{
+		if(curDI->name[j] == filename[fnameLen-1] && curDI->type[j] == 'f')
+		{
+			curDI->name[j] = 'c';
+			curDI->type[j] = 'c';
+			for(int v = 0; v < 4; v++)
+			{
+				curDI->point[j][v] = 'c';
+			}
+		}
+	}
+	curDI->writeBlock(parAddr, myPM);
 }
 int FileSystem::deleteDirectory(char *dirname, int dnameLen)
 {
-	return 0;
+	// check if name is valid
+
+	if(!validName(dirname, dnameLen))
+	{
+		return -3;
+	}
+
+	int r, addr, parAddr;
+	char pathname[256];
+	r = findBlockNum(dirname, parAddr, addr);
+
+	if (r == -1)
+	{
+		return -1;
+	}
+	char buf[65];
+	myPM->readDiskBlock(addr, buf);
+	dinode* CurDI = myDI;
+	CurDI = CurDI->createdinode(buf);
+	if(CurDI->next[0] != 'c')
+	{
+		return -2;
+	}
+	for (int i = 0; i < 10; i++)
+	{
+		if(CurDI->name[i] != 'c' || CurDI->type[i] != 'c')
+		{
+			return -2;
+		}
+	}
+
+	myPM->returnDiskBlock(addr);
+	if(parAddr == 1)
+	{
+		printf("%s\n", "Looking at myDI");
+		CurDI = myDI;
+	}
+	else
+	{
+		myPM->readDiskBlock(parAddr, buf);
+		CurDI = CurDI->createdinode(buf);
+	}
+	for(int j = 0; j < 10; j++)
+	{
+		if(CurDI->name[j] == dirname[dnameLen-1])
+		{
+			CurDI->name[j] = 'c';
+			CurDI->type[j] = 'c';
+			for(int v = 0; v < 4; v++)
+			{
+				CurDI->point[j][v] = 'c';
+			}
+		}
+	}
+	CurDI->writeBlock(parAddr, myPM);
 }
 int FileSystem::openFile(char *filename, int fnameLen, char mode, int lockId)
 {
@@ -317,7 +541,36 @@ int FileSystem::appendFile(int fileDesc, char *data, int len)
 }
 int FileSystem::seekFile(int fileDesc, int offset, int flag)
 {
-	return 0;
+	int index = isOpen( fileDesc );
+	if( index == -1 )
+		return -1; // file isn't open
+
+	// find desired rw
+	int rw;
+	if( flag = 0 )
+	{
+		rw = rwptr[index] + offset;
+	}
+	else
+	{
+		rw = offset;
+	}
+
+	// get file size and check for overflow before setting
+	int par, child;
+	char buffer[65];
+	int result = findBlockNum( openNames[index], par, child );
+	myPM->readDiskBlock( child, buffer );
+	finode* myFile = new finode();
+	myFile = myFile->createfinode( buffer );
+	int size = atoi( myFile->size );
+	if( rw > 0 && rw + offset < size )
+	{
+		rwptr[index] = rw;
+		return 0; // success
+	}
+	else
+		return -2; // overflow attempt
 }
 int FileSystem::renameFile(char *filename1, int fnameLen1, char *filename2, int fnameLen2)
 {
@@ -330,4 +583,66 @@ int FileSystem::getAttribute(char *filename, int fnameLen /* ... and other param
 int setAttribute(char *filename, int fnameLen /* ... and other parameters as needed */)
 {
 	return 0;
+}
+
+int File:System::isOpen ( int fileDesc )
+{
+	for ( int i = 0; i < 100; i++ )
+	{
+		if ( fdesc[i] == fileDesc )
+		{
+			return i;
+		}
+	}
+	return -1;
+}
+
+int FileSystem::findBlockNum(char* path, int &curAddr, int &newAddr)
+{
+	char curPath;
+	curAddr = 1;
+	newAddr = 1;
+	int i = 1;
+	dinode *curDI = myDI;
+	char nextDI[65];
+
+	while(true)
+	{
+		if(isalpha(path[i]))
+		{
+			curPath = path[i];
+		}
+		else
+		{
+			return 0;
+		}
+		for(int b = 0; b < 10; b++)
+		{
+			//if exists
+	      	if (curDI->name[b] == curPath && curDI->type[b] != 'c')
+			{
+				curAddr = newAddr;
+				newAddr = atoi(curDI->point[b]);
+				break;
+			}
+	    }
+
+		if(curAddr != newAddr)
+		{
+			myPM->readDiskBlock(newAddr, nextDI);
+			curDI = curDI->createdinode(nextDI);
+		}
+		else if(curDI->next[0] == 'c')
+		{
+			return -1;
+		}
+		else
+		{
+			newAddr = atoi(curDI->next);
+			curAddr = newAddr;
+			myPM->readDiskBlock(curAddr, nextDI);
+			curDI = curDI->createdinode(nextDI);
+		}
+		i+=2;
+	}
 }
