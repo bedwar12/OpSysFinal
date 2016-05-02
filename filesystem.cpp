@@ -684,10 +684,33 @@ int FileSystem::renameFile(char *filename1, int fnameLen1, char *filename2, int 
 }
 int FileSystem::getAttribute(char *filename, int fnameLen /* ... and other parameters as needed */)
 {
+	int inode = getFileInode(filename,fnameLen);
+	if(inode == -1) return inode;//file not found
+	if(inode < 0) return -3;//other error
+	char inodeBuff[myDM->getBlockSize()];
+	myPM->readDiskBlock(inode,inodeBuff);
+	readCount = readIntFromBuffer(inodeBuff+22);
+	writeCount = readIntFromBuffer(inodeBuff+26);
 	return 0;
 }
 int setAttribute(char *filename, int fnameLen /* ... and other parameters as needed */)
 {
+	int inode = getFileInode(filename,fnameLen);
+	if(inode == -1) return inode;//file not found
+	if(inode < 0) return -3;//other error
+	for(int i = 0; i < (int)fileDescriptors.size(); ++i)
+	{
+	 if(fileDescriptors[i].file_inode_block == inode)return -2;
+	}
+	for(int i = 0; i < (int)fileLocks.size(); ++i)
+	{
+	 if(fileLocks[i].file_inode_block == inode)return -2;
+	}
+	char inodeBuff[myDM->getBlockSize()];
+	myPM->readDiskBlock(inode,inodeBuff);
+	writeIntToBuffer(inodeBuff+22,readCount);
+	writeIntToBuffer(inodeBuff+26,writeCount);
+	myPM->writeDiskBlock(inode,inodeBuff);
 	return 0;
 }
 
