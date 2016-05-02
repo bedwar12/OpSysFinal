@@ -8,9 +8,9 @@
 using namespace std;
 
 
-//Mike: getAttribute and setAttribute
-//Luke: ReadFile and appendFile and some changes to writeFile
-//Kyle: CloseFile and RenameFile
+//Mike: closeFile
+//Luke: renameFile
+//Kyle: Work on Security
 
 
 FileSystem::FileSystem(DiskManager *dm, char fileSystemName)
@@ -528,7 +528,117 @@ int FileSystem::closeFile(int fileDesc)
 }
 int FileSystem::readFile(int fileDesc, char *data, int len)
 {
-  return 0;
+	// error checks
+int index = isOpen( fileDesc );
+if( index == -1 )
+{
+	return -1; // file isn't open
+}
+if( len < 0 )
+{
+	return -2; //negative length
+	}
+	if(myMode[fileDesc] == 'r')
+	{
+			return -3; // operation not permitted
+	}
+
+// some local variables
+int rw = rwptr[index];
+int lastByte = rw+len;
+int par, child, currentBlock,dataIndex;
+char buffer[64];
+
+// find blknum
+int result = findBlockNum( openNames[index], par, child );
+// read finode block
+myPM->readDiskBlock( child, buffer );
+finode* myFile = new finode();
+myFile = myFile->createfinode( buffer );
+	// store size
+int size = atoi( myFile->size );
+iinode* myII;
+
+	// set currentBlock
+currentBlock = rw / 64;
+
+// while still in the finode
+while(rw < 3*64 && rw < lastByte)
+{
+		// if the block is unallocated, operation not permitted
+			if(myFile->direct[currentBlock][0] == 'c')
+			{
+					rwptr[fileDesc] = rw;
+					return dataIndex;// reached end of file
+			}
+
+			// set/reset index
+		index = rw % 64;
+
+		// read currentBlock into buffer
+			myPM->readDiskBlock(atoi(myFile->direct[currentBlock]),buffer);
+
+			// write the rest of currentBlock
+			while(index < 64 && rw < lastByte){
+					data[dataIndex] = buffer[index];
+					index++;
+					dataIndex++;
+					rw++;
+			}
+
+			currentBlock++;
+	}
+
+	// if not done, we need to create an inode
+	if(rw < lastByte)
+	{
+			if(myFile->indirect[0] == 'c')
+			{
+					rwptr[fileDesc] = rw;
+					return dataIndex;  //end of written file
+			}
+			else
+			{
+					// create inode
+					myPM -> readDiskBlock(atoi(myFile->indirect),buffer);
+					myII = myII->createiinode(buffer);
+			}
+			// moving to iinode, reset currentBlock
+			currentBlock = 0;
+	}
+
+
+	// writing in the inode
+	while(rw < lastByte)
+	{
+			// if the block is unallocated, allocate one
+			if(myII>addr[currentBlock][0] == 'c')
+			{
+					rwptr[fileDesc] = rw;
+					return dataIndex;  //end of written file
+			}
+
+			//reset index
+			index = rw % 64;
+
+			// read in current block
+			myPM->readDiskBlock(atoi(myII-addr[currentBlock]),buffer);
+
+			// write the rest of currentBlock
+			while(index < 64 && rw < lastByte){
+					data[dataIndex] = buffer[index];
+					index++;
+					dataIndex++;
+					rw++;
+			}
+
+			currentBlock++;
+}
+
+	// set rwptr
+	rwptr[fileDesc] = rw;
+
+	return dataIndex; // dataIndex is number of bytes written
 }
 int FileSystem::writeFile(int fileDesc, char *data, int len)
 {
@@ -543,107 +653,160 @@ if( len < 0 )
 {
 	return -2; //negative length
 	}
+	if(myMode[fileDesc] == 'r')
+	{
+			return -3; // operation not permitted
+	}
 
 // get file size and check for overflow before setting
 int rw = rwptr[index];
-bool inFinode = true;
-int par, child, finder = rw, currentBlock, index;
+int lastByte = rw+len;
+int par, child, currentBlock,dataIndex;
 char buffer[64];
+
+// find blknum
 int result = findBlockNum( openNames[index], par, child );
+// read finode block
 myPM->readDiskBlock( child, buffer );
 finode* myFile = new finode();
 myFile = myFile->createfinode( buffer );
+	// store size
 int size = atoi( myFile->size );
+iinode* myII;
 
-// find the current block
-// check if rw is in a direct block
-if(finder < 3*64)
-	{
-			currentBlock = rw / 64;
+// set currentBlock
+currentBlock = rw / 64;
 
-			// read currentBlock into buffer
-			myPm->readBlock(myFile->direct[currentBlock],buffer);
-	}
-	else // we have to read in an inode and rw is somewhere in it
-	{
-			// new we are in the iinode
-			// set finder
-			finder -= (3*64);
-
-			// create inode
-			myPM -> readDiskBlock(myFile->indirect);
-			iinode* myIinode = new iinode();
-			myIinode0 = myIinode0->createiinode(buffer);
-
-			//set currentBlock
-			currentBlock = (finder / 64) + 3;
-
-			// read currentBlock into buffer
-			myPm->readBlock(atoi(myIinode0->addr[currentBlock]),buffer);
-	}
-
-	// start writing
-
-	index = rw % 64;
-	int dataIndex = 0;
-
-	// write the rest of currentBlock
-	while(index < 64 && rw < len){
-			buffer[index] = data[dataIndex];
-			myPM->writeBlock(atoi(myIinode->addr[currentBlock]),buffer);
-			index++;
-			dataIndex++;
-			rw++;
-			currentBlock++;
-	}
-
-	if(rw < 3*64) // still in the finode direct blocks
-	{
-			while(rw < 3*64)
+// while still in the finode
+while(rw < 3*64 && rw < lastByte)
+{
+		// if the block is unallocated, allocate one
+			if(myFile->direct[currentBlock][0] == 'c')
 			{
-					strncpy(buffer, data+dataIndex, 64);
-					myPm->writeBlock(atoi(myIinode->addr[currentBlock]),buffer);
-					dataIndex+=64;
-					rw+=64;
-					currentBlock++;
-			}
-	}
-	else// rw > 3*64, we are in the inode
-	{
-			if(rw >= (3*64) + (16*64))
-			{
-					// file is too long
+					int tmp = myPM->getFreeDiskBlock();
+
+					sprintf(myFile->direct[currentBlock],"%d",tmp);
 			}
 
-			// if bytes left to write is > 64, we can write block by block
-			while(len - rw > 64)
-			{
-					strncpy(buffer, data+dataIndex, 64);
-					myPm->writeBlock(atoi(myIinode->addr[currentBlock]),buffer);
-					dataIndex+=64;
-					rw+=64;
-					currentBlock++;
-			}
+		index = rw % 64;
 
-			// reset index for new currentBlock
-			index = rw % 64;
+		// read currentBlock into buffer
+			myPM->readDiskBlock(atoi(myFile->direct[currentBlock]),buffer);
 
 			// write the rest of currentBlock
-			while(index < 64 && rw < len)
-			{
+			while(index < 64 && rw < lastByte){
 					buffer[index] = data[dataIndex];
-					myPM->writeBlock(atoi(myIinode->addr[currentBlock]),buffer);
 					index++;
 					dataIndex++;
 					rw++;
-					currentBlock++;
 			}
+
+			myPM->writeDiskBlock(atoi(myFile->direct[currentBlock]),buffer);
+			currentBlock++;
+
 	}
-return 0;
+
+	// if not done, we need to create an inode
+	if(rw < lastByte)
+	{
+			if(myFile->indirect[0] == 'c')
+			{
+					int tmp = myPM->getFreeDiskBlock();
+
+					sprintf(myFile->indirect,"%d",tmp);
+			}
+			// create inode
+			myPM -> readDiskBlock(atoi(myFile->indirect),buffer);
+			myII = myII->createiinode(buffer);
+
+			// moving to iinode, reset currentBlock
+			currentBlock = 0;
+	}
+
+
+	// writing in the inode
+	while(rw < lastByte)
+	{
+			// if the block is unallocated, allocate one
+			if(myII>addr[currentBlock][0] == 'c')
+			{
+					int tmp = myPM->getFreeDiskBlock();
+
+					sprintf(myII->addr[currentBlock],"%d",tmp);
+			}
+
+			//reset index
+			index = rw % 64;
+
+			// read in current block
+			myPM->readDiskBlock(atoi(myII-addr[currentBlock]),buffer);
+
+			// write the rest of currentBlock
+			while(index < 64 && rw < lastByte){
+					buffer[index] = data[dataIndex];
+					index++;
+					dataIndex++;
+					rw++;
+			}
+
+			myPM->writeDiskBlock(atoi(myII->addr[currentBlock]),buffer);
+			currentBlock++;
+
+}
+
+
+	// if file is longer, rewrite the finode block
+
+	if( size < rw + 1)
+	{
+			size = rw + 1;
+
+
+			sprintf(myFile->size,"%d",size);
+			myFile->writeFBlock(child,myPM);
+	}
+
+	// set rwptr
+	rwptr[fileDesc] = rw;
+
+	return dataIndex; // dataIndex is number of bytes written
 }
 int FileSystem::appendFile(int fileDesc, char *data, int len)
 {
-	return 0;
+	// error checks
+int index = isOpen( fileDesc );
+if( index == -1 )
+{
+	return -1; // file isn't open
+}
+if( len < 0 )
+{
+	return -2; //negative length
+	}
+	if(myMode[fileDesc] == 'r')
+	{
+			return -3; // operation not permitted
+	}
+
+	// some useful things
+	char buffer[64];
+	int fb, par, child, rw, appended;
+	int curBlock;
+	// create finode
+
+	fb = findBlockNum(openNames[fileDesc], par, child);
+
+	myPM->readDiskBlock(child,buffer);
+
+	finode* myFile;
+	myFile = myFile->createfinode(buffer);
+
+	// find the end of the file
+	rw = atoi(myFile->size);
+
+	seekFile(fileDesc, rw, 1);
+
+	return writeFile(fileDesc,data,len);
 }
 int FileSystem::seekFile(int fileDesc, int offset, int flag)
 {
@@ -684,10 +847,33 @@ int FileSystem::renameFile(char *filename1, int fnameLen1, char *filename2, int 
 }
 int FileSystem::getAttribute(char *filename, int fnameLen /* ... and other parameters as needed */)
 {
+	int inode = getFileInode(filename,fnameLen);
+	if(inode == -1) return inode;//file not found
+	if(inode < 0) return -3;//other error
+	char inodeBuff[myDM->getBlockSize()];
+	myPM->readDiskBlock(inode,inodeBuff);
+	readCount = readIntFromBuffer(inodeBuff+22);
+	writeCount = readIntFromBuffer(inodeBuff+26);
 	return 0;
 }
 int setAttribute(char *filename, int fnameLen /* ... and other parameters as needed */)
 {
+	int inode = getFileInode(filename,fnameLen);
+	if(inode == -1) return inode;//file not found
+	if(inode < 0) return -3;//other error
+	for(int i = 0; i < (int)fileDescriptors.size(); ++i)
+	{
+	 if(fileDescriptors[i].file_inode_block == inode)return -2;
+	}
+	for(int i = 0; i < (int)fileLocks.size(); ++i)
+	{
+	 if(fileLocks[i].file_inode_block == inode)return -2;
+	}
+	char inodeBuff[myDM->getBlockSize()];
+	myPM->readDiskBlock(inode,inodeBuff);
+	writeIntToBuffer(inodeBuff+22,readCount);
+	writeIntToBuffer(inodeBuff+26,writeCount);
+	myPM->writeDiskBlock(inode,inodeBuff);
 	return 0;
 }
 
