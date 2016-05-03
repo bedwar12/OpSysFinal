@@ -524,7 +524,19 @@ int FileSystem::openFile(char *filename, int fnameLen, char mode, int lockId)
 }
 int FileSystem::closeFile(int fileDesc)
 {
-	return 0;
+	for (int i = 0; i < 100; i++)
+	{
+		if(fdesc[i] == fileDesc)
+		{
+			memset(openNames[i], 0, 64);
+			fdesc[i] = -1;
+			myMode[i] = 0;
+			rwptr[i] = -1;
+			return 0;
+		}
+
+	}
+	return -1;
 }
 int FileSystem::readFile(int fileDesc, char *data, int len)
 {
