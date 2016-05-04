@@ -11,6 +11,7 @@ PartitionManager::PartitionManager(DiskManager *dm, char partitionname, int part
   myDM = dm;
   myPartitionName = partitionname;
   myPartitionSize = myDM->getPartitionSize(myPartitionName);
+  printf("sizes %d %d\n", myPartitionSize, partitionsize);
 	freeSpace = new BitVector(partitionsize);
 	char buffer[64];
 	for(int i = 0; i < 64; i++){
@@ -29,6 +30,7 @@ PartitionManager::PartitionManager(DiskManager *dm, char partitionname, int part
   	//BitVector is all 0's except for blocks 0 and 1
   	freeSpace -> setBit(0);
   	freeSpace -> setBit(1);
+  	
   	freeSpace -> getBitVector((unsigned int *) buffer);
   	int r;
   	r = myDM -> writeDiskBlock(myPartitionName, 0, buffer);

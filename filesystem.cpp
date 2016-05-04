@@ -8,9 +8,9 @@
 using namespace std;
 
 
-//Mike: closeFile
-//Luke: renameFile
-//Kyle: Work on Security
+//Mike: deleteFile and deleteDirectory
+//Luke: ReadFile and WriteFile
+//Kyle: Seek and CreateDir
 
 
 FileSystem::FileSystem(DiskManager *dm, char fileSystemName)
@@ -29,25 +29,61 @@ FileSystem::FileSystem(DiskManager *dm, char fileSystemName)
 	myDI->type[0] = 'd';
 	myDI->writeBlock(1, myPM);
 
-	for (int i = 0; i < 100; i++)
-	{
-		memset(openNames[i], 0, 64);
-	}
-	memset(myMode, 0, 100);
-	memset(fdesc, -1, 100);
-	memset(rwptr, -1, 100);
+	//for (int i = 0; i < 100; i++)
+	//{
+		//memset(openNames[i], 0, 64);
+	//}
+	//memset(myMode, 0, 100);
+	//memset(fdesc, -1, 100);
+	//memset(rwptr, -1, 100);
+
+	fdesc = -1;
 }
 
 FileSystem::~FileSystem()
 {
-	free(myMode);
-	for(int i = 0; i < 100; i++)
-	{
-		free(openNames[i]);
-	}
-	free(fdesc);
-	free(rwptr);
+
 }
+
+// if file exists, returns -1, else return 0
+int FileSystem::doesExist(char *fname)
+{
+	int r, addr1, addr2;
+	r = findBlockNum(fname, addr1, addr2);
+	if(r == 0)
+	{
+		// already exists
+		return -1;
+	}
+	else {
+		return 0;
+	}
+}
+
+// name is valid, return 1, else return 0
+int FileSystem::validName(char* name, int length)
+{
+	for(int i=0; i < length; i++)
+	{
+		if(i%2 == 0)
+		{
+			if(name[i] != '/')
+			{
+				return 0;
+			}
+		}
+		else
+		{
+			if(!isalpha(name[i]))
+			{
+				return 0;
+			}
+		}
+	}
+	return 1;
+}
+
+
 int FileSystem::createFile(char *filename, int fnameLen)
 {
   // check if name is valid
@@ -59,15 +95,15 @@ int FileSystem::createFile(char *filename, int fnameLen)
 	int result, par, child;
 	result = doesExist(filename);
 	printf("%d\n", result);
-	if(result == (-1))
+	if(result == -1)
 	{
-		return (-1);
+		return -1;
 	}
 
 	finode *curF;
 	int fdb;
 	bool success = false;
-	// get free disk block
+	// get free disk block, return -2 if not found
   	if((fdb = myPM->getFreeDiskBlock()) == (-1))
     {
       return (-2);
@@ -158,8 +194,10 @@ int FileSystem::createFile(char *filename, int fnameLen)
 	}
 	return 0;
 }
+
 int FileSystem::createDirectory(char *dirname, int dnameLen)
 {
+
 	// check if name is valid
 
 	if(!validName(dirname, dnameLen))
@@ -234,22 +272,22 @@ int FileSystem::createDirectory(char *dirname, int dnameLen)
 				if(curDI->next[0] == 'c')
 		{
 			// use the free disk block to allocate ptr for next dinode
-				sprintf(curDI->next, "%04d", fdb);
+			sprintf(curDI->next, "%04d", fdb);
 			result = curDI->writeBlock(child, myPM);
 			// dinode created to extend next pointer
-				dinode *newDI = new dinode();
-				newDI->name[0] = dirname[dnameLen -1];
-				newDI->type[0] = 'd';
+			dinode *newDI = new dinode();
+			newDI->name[0] = dirname[dnameLen -1];
+			newDI->type[0] = 'd';
 
 			// get another free disk block for the dinode we create
-				int fdb2;
-					if((fdb2 = myPM->getFreeDiskBlock()) == (-1))
+		    int fdb2;
+			if((fdb2 = myPM->getFreeDiskBlock()) == (-1))
 			{
-					return (-2);
+				return (-2);
 			}
 
-					sprintf(newDI->point[0], "%04d", fdb2);
-					newDI->writeBlock(fdb, myPM);
+			sprintf(newDI->point[0], "%04d", fdb2);
+			newDI->writeBlock(fdb, myPM);
 			return 0;
 		}
 		else
@@ -262,6 +300,87 @@ int FileSystem::createDirectory(char *dirname, int dnameLen)
 		}
 	}
 }
+
+// return 0 if blocknum not found
+int FileSystem::findBlockNum(char* path, int &curAddr, int &newAddr)
+{
+	char curPath;
+	curAddr = 1;
+	newAddr = 1;
+	int i = 1;
+	dinode *curDI = myDI;
+	char nextDI[65];
+
+	while(true)
+	{
+	    // if path[odd] is a letter
+		if(isalpha(path[i]))
+		{
+			curPath = path[i];
+		}
+		else
+		{
+		    // bad filename format, return 0
+			return 0;
+		}
+		// for all pointers in the current directory
+		for(int b = 0; b < 10; b++)
+		{
+			//if exists
+	      	if (curDI->name[b] == curPath && curDI->type[b] != 'c')
+			{
+			    // set curAddr and newAddr
+				curAddr = newAddr;
+				newAddr = atoi(curDI->point[b]);
+				break;
+			}
+	    }
+        // if newAddr points to a new node
+		if(curAddr != newAddr)
+		{
+		    // read disk block newAddr into nextDI
+			myPM->readDiskBlock(newAddr, nextDI);
+			curDI = curDI->createdinode(nextDI);
+		}
+		// if curDI has no next directory
+		else if(curDI->next[0] == 'c')
+		{
+			return -1;
+		}
+		else
+		{
+			newAddr = atoi(curDI->next);
+			curAddr = newAddr;
+			myPM->readDiskBlock(curAddr, nextDI);
+			curDI = curDI->createdinode(nextDI);
+		}
+		i+=2;
+	}
+}
+
+int FileSystem::isLocked(char *filename){
+
+    if(myLockTable.find(filename) == myLockTable.end())
+        return 0;// file is unlocked return false
+    else
+        return 1;// file is locked return true
+}
+
+
+int FileSystem::isOpen ( int fileDesc )
+{
+
+	    // show content:
+        map<int,char*>::iterator it = openNames.find(fileDesc);
+		if ( it != openNames.end() )
+		{
+			return fileDesc;
+		}
+		else
+	        return -1;
+}
+
+
 int FileSystem::lockFile(char *filename, int fnameLen)
 {
   int location, par, child;
@@ -500,7 +619,10 @@ int FileSystem::openFile(char *filename, int fnameLen, char mode, int lockId)
 			return -2;
 	}
 
-	// add entry to open block table
+
+
+    /*
+    	// add entry to open block table
 	int i = 0;
 	while(true)
 	{
@@ -513,322 +635,340 @@ int FileSystem::openFile(char *filename, int fnameLen, char mode, int lockId)
 			myMode[i] = mode;
 			break;
 		}
+		// if open spot not found, return -4
 		if(i == 100)
 		{
 			return -4;
 		}
 		i++;
-	}
+	}*/
+	fdesc++;
 
-	return fdesc[i];
+	openNames[fdesc] = filename;
+	myMode[fdesc] = mode;
+	rwptr[fdesc] = 0;
+
+	return fdesc;
 }
+
 int FileSystem::closeFile(int fileDesc)
 {
-	for (int i = 0; i < 100; i++)
-	{
-		if(fdesc[i] == fileDesc)
-		{
-			memset(openNames[i], 0, 64);
-			fdesc[i] = -1;
-			myMode[i] = 0;
-			rwptr[i] = -1;
-			return 0;
-		}
-
-	}
-	return -1;
+	return 0;
 }
+
 int FileSystem::readFile(int fileDesc, char *data, int len)
 {
-	// error checks
-int index = isOpen( fileDesc );
-if( index == -1 )
-{
-	return -1; // file isn't open
-}
-if( len < 0 )
-{
-	return -2; //negative length
-	}
-	if(myMode[fileDesc] == 'r')
+    // error checks
+	int index = isOpen( fileDesc );
+	if( index == -1 )
 	{
-			return -3; // operation not permitted
+		return -1; // file isn't open
+	}
+	if( len < 0 )
+	{
+		return -2; //negative length
+    }
+    if(myMode[fileDesc] == 'r')
+    {
+        return -3; // operation not permitted
+    }
+
+	// some local variables
+	int rw = rwptr[index];
+	int lastByte = rw+len;
+	int par, child, currentBlock,dataIndex;
+	char buffer[64];
+
+	// find blknum
+	int result = findBlockNum( openNames[index], par, child );
+	// read finode block
+	myPM->readDiskBlock( child, buffer );
+	finode* myFile = new finode();
+	myFile = myFile->createfinode( buffer );
+    // store size
+	int size = atoi( myFile->size );
+	iinode* myII;
+
+    // set currentBlock
+	currentBlock = rw / 64;
+
+	// while still in the finode
+	while(rw < 3*64 && rw < lastByte)
+	{
+	    // if the block is unallocated, operation not permitted
+        if(myFile->direct[currentBlock][0] == 'c')
+        {
+            rwptr[fileDesc] = rw;
+            return dataIndex;// reached end of file
+        }
+
+        // set/reset index
+	    index = rw % 64;
+
+	    // read currentBlock into buffer
+        myPM->readDiskBlock(atoi(myFile->direct[currentBlock]),buffer);
+
+        // write the rest of currentBlock
+        while(index < 64 && rw < lastByte){
+            data[dataIndex] = buffer[index];
+            index++;
+            dataIndex++;
+            rw++;
+        }
+
+        currentBlock++;
+    }
+
+    // if not done, we need to create an inode
+    if(rw < lastByte)
+    {
+        if(myFile->indirect[0] == 'c')
+        {
+            rwptr[fileDesc] = rw;
+            return dataIndex;  //end of written file
+        }
+        else
+        {
+            // create inode
+            myPM -> readDiskBlock(atoi(myFile->indirect),buffer);
+            myII = myII->createiinode(buffer);
+        }
+        // moving to iinode, reset currentBlock
+        currentBlock = 0;
+    }
+
+
+    // writing in the inode
+    while(rw < lastByte)
+    {
+        // if the block is unallocated, allocate one
+        if(myII->addr[currentBlock][0] == 'c')
+        {
+            rwptr[fileDesc] = rw;
+            return dataIndex;  //end of written file
+        }
+
+        //reset index
+        index = rw % 64;
+
+        // read in current block
+        myPM->readDiskBlock(atoi(myII->addr[currentBlock]),buffer);
+
+        // write the rest of currentBlock
+        while(index < 64 && rw < lastByte){
+            data[dataIndex] = buffer[index];
+            index++;
+            dataIndex++;
+            rw++;
+        }
+
+        currentBlock++;
 	}
 
-// some local variables
-int rw = rwptr[index];
-int lastByte = rw+len;
-int par, child, currentBlock,dataIndex;
-char buffer[64];
+    // set rwptr
+    rwptr[fileDesc] = rw;
 
-// find blknum
-int result = findBlockNum( openNames[index], par, child );
-// read finode block
-myPM->readDiskBlock( child, buffer );
-finode* myFile = new finode();
-myFile = myFile->createfinode( buffer );
-	// store size
-int size = atoi( myFile->size );
-iinode* myII;
+    return dataIndex; // dataIndex is number of bytes written
+}
 
-	// set currentBlock
-currentBlock = rw / 64;
-
-// while still in the finode
-while(rw < 3*64 && rw < lastByte)
+void FileSystem::deleteIInode(int blknum)
 {
-		// if the block is unallocated, operation not permitted
-			if(myFile->direct[currentBlock][0] == 'c')
-			{
-					rwptr[fileDesc] = rw;
-					return dataIndex;// reached end of file
-			}
-
-			// set/reset index
-		index = rw % 64;
-
-		// read currentBlock into buffer
-			myPM->readDiskBlock(atoi(myFile->direct[currentBlock]),buffer);
-
-			// write the rest of currentBlock
-			while(index < 64 && rw < lastByte){
-					data[dataIndex] = buffer[index];
-					index++;
-					dataIndex++;
-					rw++;
-			}
-
-			currentBlock++;
-	}
-
-	// if not done, we need to create an inode
-	if(rw < lastByte)
+	char buf[65];
+	int delBlk;
+	myPM->readDiskBlock(blknum, buf);
+	iinode *myII = new iinode();
+	myII = myII->createiinode(buf);
+	for(int i = 0; i < 16; i++)
 	{
-			if(myFile->indirect[0] == 'c')
-			{
-					rwptr[fileDesc] = rw;
-					return dataIndex;  //end of written file
-			}
-			else
-			{
-					// create inode
-					myPM -> readDiskBlock(atoi(myFile->indirect),buffer);
-					myII = myII->createiinode(buffer);
-			}
-			// moving to iinode, reset currentBlock
-			currentBlock = 0;
+		if(myII->addr[i][0] != 'c')
+		{
+			delBlk = atoi(myII->addr[i]);
+			myPM->returnDiskBlock(delBlk);
+		}
 	}
-
-
-	// writing in the inode
-	while(rw < lastByte)
-	{
-			// if the block is unallocated, allocate one
-			if(myII->addr[currentBlock][0] == 'c')
-			{
-					rwptr[fileDesc] = rw;
-					return dataIndex;  //end of written file
-			}
-
-			//reset index
-			index = rw % 64;
-
-			// read in current block
-			myPM->readDiskBlock(atoi(myII->addr[currentBlock]),buffer);
-
-			// write the rest of currentBlock
-			while(index < 64 && rw < lastByte){
-					data[dataIndex] = buffer[index];
-					index++;
-					dataIndex++;
-					rw++;
-			}
-
-			currentBlock++;
 }
 
-	// set rwptr
-	rwptr[fileDesc] = rw;
-
-	return dataIndex; // dataIndex is number of bytes written
-}
 int FileSystem::writeFile(int fileDesc, char *data, int len)
 {
+    // error checks
+	int index = isOpen( fileDesc );
+	if( index == -1 )
+	{
+		return -1; // file isn't open
+	}
+	if( len < 0 )
+	{
+		return -2; //negative length
+    }
+    if(myMode[fileDesc] == 'r')
+    {
+        return -3; // operation not permitted
+    }
 
-	// error checks
-int index = isOpen( fileDesc );
-if( index == -1 )
-{
-	return -1; // file isn't open
+	// get file size and check for overflow before setting
+	int rw = rwptr[index];
+	int lastByte = rw+len;
+	int par, child, currentBlock,dataIndex;
+	char buffer[64];
+
+	// find blknum
+	int result = findBlockNum( openNames[index], par, child );
+	// read finode block
+	myPM->readDiskBlock( child, buffer );
+	finode* myFile = new finode();
+	myFile = myFile->createfinode( buffer );
+    // store size
+	int size = atoi( myFile->size );
+	iinode* myII;
+
+	// set currentBlock
+	currentBlock = rw / 64;
+
+	// while still in the finode
+	while(rw < 3*64 && rw < lastByte && currentBlock < 3)
+	{
+	    // if the block is unallocated, allocate one
+        if(myFile->direct[currentBlock][0] == 'c')
+        {
+            int tmp = myPM->getFreeDiskBlock();
+
+            sprintf(myFile->direct[currentBlock],"%d",tmp);
+        }
+
+	    index = rw % 64;
+
+	    // read currentBlock into buffer
+        myPM->readDiskBlock(atoi(myFile->direct[currentBlock]),buffer);
+
+        // write the rest of currentBlock
+        while(index < 64 && rw < lastByte && dataIndex < len){
+            buffer[index] = data[dataIndex];
+            index++;
+            dataIndex++;
+            rw++;
+        }
+
+        myPM->writeDiskBlock(atoi(myFile->direct[currentBlock]),buffer);
+        currentBlock++;
+
+    }
+
+    // if not done, we need to create an inode
+    if(rw < lastByte)
+    {
+        if(myFile->indirect[0] == 'c')
+        {
+            int tmp = myPM->getFreeDiskBlock();
+
+            sprintf(myFile->indirect,"%d",tmp);
+        }
+        // create inode
+        myPM -> readDiskBlock(atoi(myFile->indirect),buffer);
+        myII = myII->createiinode(buffer);
+
+        // moving to iinode, reset currentBlock
+        currentBlock = 0;
+    }
+
+
+    // writing in the inode
+    while(rw < lastByte && currentBlock < 16)
+    {
+        // if the block is unallocated, allocate one
+        if(myII->addr[currentBlock][0] == 'c')
+        {
+            int tmp = myPM->getFreeDiskBlock();
+
+            sprintf(myII->addr[currentBlock],"%d",tmp);
+        }
+
+        //reset index
+        index = rw % 64;
+
+        // read in current block
+        myPM->readDiskBlock(atoi(myII->addr[currentBlock]),buffer);
+
+        // write the rest of currentBlock
+        while(index < 64 && rw < lastByte && dataIndex < len){
+            buffer[index] = data[dataIndex];
+            index++;
+            dataIndex++;
+            rw++;
+        }
+
+        myPM->writeDiskBlock(atoi(myII->addr[currentBlock]),buffer);
+        currentBlock++;
+
+	}
+
+    // write iinode block
+    myII->writeIBlock(atoi(myFile->indirect),myPM);
+
+    // if file is longer, rewrite the finode block
+
+    if( size < rw + 1)
+    {
+        size = rw + 1;
+
+
+        sprintf(myFile->size,"%d",size);
+        myFile->writeFBlock(child,myPM);
+    }
+
+    // set rwptr
+    rwptr[fileDesc] = rw;
+
+    return dataIndex; // dataIndex is number of bytes written
 }
-if( len < 0 )
-{
-	return -2; //negative length
-	}
-	if(myMode[fileDesc] == 'r')
-	{
-			return -3; // operation not permitted
-	}
 
-// get file size and check for overflow before setting
-int rw = rwptr[index];
-int lastByte = rw+len;
-int par, child, currentBlock,dataIndex;
-char buffer[64];
-
-// find blknum
-int result = findBlockNum( openNames[index], par, child );
-// read finode block
-myPM->readDiskBlock( child, buffer );
-finode* myFile = new finode();
-myFile = myFile->createfinode( buffer );
-	// store size
-int size = atoi( myFile->size );
-iinode* myII;
-
-// set currentBlock
-currentBlock = rw / 64;
-
-// while still in the finode
-while(rw < 3*64 && rw < lastByte)
-{
-		// if the block is unallocated, allocate one
-			if(myFile->direct[currentBlock][0] == 'c')
-			{
-					int tmp = myPM->getFreeDiskBlock();
-
-					sprintf(myFile->direct[currentBlock],"%d",tmp);
-			}
-
-		index = rw % 64;
-
-		// read currentBlock into buffer
-			myPM->readDiskBlock(atoi(myFile->direct[currentBlock]),buffer);
-
-			// write the rest of currentBlock
-			while(index < 64 && rw < lastByte){
-					buffer[index] = data[dataIndex];
-					index++;
-					dataIndex++;
-					rw++;
-			}
-
-			myPM->writeDiskBlock(atoi(myFile->direct[currentBlock]),buffer);
-			currentBlock++;
-
-	}
-
-	// if not done, we need to create an inode
-	if(rw < lastByte)
-	{
-			if(myFile->indirect[0] == 'c')
-			{
-					int tmp = myPM->getFreeDiskBlock();
-
-					sprintf(myFile->indirect,"%d",tmp);
-			}
-			// create inode
-			myPM -> readDiskBlock(atoi(myFile->indirect),buffer);
-			myII = myII->createiinode(buffer);
-
-			// moving to iinode, reset currentBlock
-			currentBlock = 0;
-	}
-
-
-	// writing in the inode
-	while(rw < lastByte)
-	{
-			// if the block is unallocated, allocate one
-			if(myII->addr[currentBlock][0] == 'c')
-			{
-					int tmp = myPM->getFreeDiskBlock();
-
-					sprintf(myII->addr[currentBlock],"%d",tmp);
-			}
-
-			//reset index
-			index = rw % 64;
-
-			// read in current block
-			myPM->readDiskBlock(atoi(myII->addr[currentBlock]),buffer);
-
-			// write the rest of currentBlock
-			while(index < 64 && rw < lastByte){
-					buffer[index] = data[dataIndex];
-					index++;
-					dataIndex++;
-					rw++;
-			}
-
-			myPM->writeDiskBlock(atoi(myII->addr[currentBlock]),buffer);
-			currentBlock++;
-
-}
-
-
-	// if file is longer, rewrite the finode block
-
-	if( size < rw + 1)
-	{
-			size = rw + 1;
-
-
-			sprintf(myFile->size,"%d",size);
-			myFile->writeFBlock(child,myPM);
-	}
-
-	// set rwptr
-	rwptr[fileDesc] = rw;
-
-	return dataIndex; // dataIndex is number of bytes written
-}
 int FileSystem::appendFile(int fileDesc, char *data, int len)
 {
-	// error checks
-int index = isOpen( fileDesc );
-if( index == -1 )
-{
-	return -1; // file isn't open
-}
-if( len < 0 )
-{
-	return -2; //negative length
-	}
-	if(myMode[fileDesc] == 'r')
+    // error checks
+	int index = isOpen( fileDesc );
+	if( index == -1 )
 	{
-			return -3; // operation not permitted
+		return -1; // file isn't open
 	}
+	if( len < 0 )
+	{
+		return -2; //negative length
+    }
+    if(myMode[fileDesc] == 'r')
+    {
+        return -3; // operation not permitted
+    }
 
-	// some useful things
-	char buffer[64];
-	int fb, par, child, rw, appended;
-	int curBlock;
-	// create finode
+    // some useful things
+    char buffer[64];
+    int fb, par, child, rw, appended;
+    int curBlock;
+    // create finode
 
-	fb = findBlockNum(openNames[fileDesc], par, child);
+    fb = findBlockNum(openNames[fileDesc], par, child);
 
-	myPM->readDiskBlock(child,buffer);
+    myPM->readDiskBlock(child,buffer);
 
-	finode* myFile;
-	myFile = myFile->createfinode(buffer);
+    finode* myFile;
+    myFile = myFile->createfinode(buffer);
 
-	// find the end of the file
-	rw = atoi(myFile->size);
+    // find the end of the file
+    rw = atoi(myFile->size);
 
-	seekFile(fileDesc, rw, 1);
+    seekFile(fileDesc, rw, 1);
 
-	return writeFile(fileDesc,data,len);
+    return writeFile(fileDesc,data,len);
+
 }
+
 int FileSystem::seekFile(int fileDesc, int offset, int flag)
 {
-	int index = isOpen( fileDesc );
+		int index = isOpen( fileDesc );
 	if( index == -1 )
 		return -1; // file isn't open
 
 	// find desired rw
 	int rw;
-	if( flag == 0 )
+	if( flag = 0 )
 	{
 		rw = rwptr[index] + offset;
 	}
@@ -895,6 +1035,7 @@ int FileSystem::renameFile(char *filename1, int fnameLen1, char *filename2, int 
   }
   return 0;
 	*/
+	return 0;
 }
 int FileSystem::getAttribute(char *filename, int fnameLen /* ... and other parameters as needed */)
 {
@@ -907,6 +1048,7 @@ int FileSystem::getAttribute(char *filename, int fnameLen /* ... and other param
 	writeCount = readIntFromBuffer(inodeBuff+26);
 	return 0;
 	*/
+	return 0;
 }
 int setAttribute(char *filename, int fnameLen /* ... and other parameters as needed */)
 {
@@ -928,150 +1070,5 @@ int setAttribute(char *filename, int fnameLen /* ... and other parameters as nee
 	myPM->writeDiskBlock(inode,inodeBuff);
 	return 0;
 	*/
-}
-
-int FileSystem::isOpen ( int fileDesc )
-{
-	for ( int i = 0; i < 100; i++ )
-	{
-		if ( fdesc[i] == fileDesc )
-		{
-			return i;
-		}
-	}
-	return -1;
-}
-
-
-/* get inode for a file */
-/*
-int FileSystem::getFileInode(char *filename, int fnameLen)
-{
-  return getInode(filename,fnameLen,0);
-}
-*/
-
-/*get inode for a directory */
-/*
-int FileSystem::getDirectoryInode(char *filename, int fnameLen)
-{
-  return getInode(filename,fnameLen,1);
-}
-*/
-
-
-int FileSystem::validName(char* name, int length)
-{
-	for(int i=0; i < length; i++)
-	{
-		if(i%2 == 0)
-		{
-			if(name[i] != '/')
-			{
-				return 0;
-			}
-		}
-		else
-		{
-			if(!isalpha(name[i]))
-			{
-				return 0;
-			}
-		}
-	}
-	return 1;
-}
-
-int FileSystem::doesExist(char *fname)
-{
-	int r, addr1, addr2;
-	r = findBlockNum(fname, addr1, addr2);
-	if(r == 0)
-	{
-		// already exists
-		return -1;
-	}
-	else {
-		return 0;
-	}
-}
-
-void FileSystem::deleteIInode(int blknum)
-{
-	char buf[65];
-	int delBlk;
-	myPM->readDiskBlock(blknum, buf);
-	iinode *myII = new iinode();
-	myII = myII->createiinode(buf);
-	for(int i = 0; i < 16; i++)
-	{
-		if(myII->addr[i][0] != 'c')
-		{
-			delBlk = atoi(myII->addr[i]);
-			myPM->returnDiskBlock(delBlk);
-		}
-	}
-}
-
-
-int FileSystem::isLocked(char *filename){
-
-    if(myLockTable.find(filename) == myLockTable.end())
-        return 0;// file is unlocked return false
-    else
-        return 1;// file is locked return true
-}
-
-
-
-
-
-int FileSystem::findBlockNum(char* path, int &curAddr, int &newAddr)
-{
-	char curPath;
-	curAddr = 1;
-	newAddr = 1;
-	int i = 1;
-	dinode *curDI = myDI;
-	char nextDI[65];
-
-	while(true)
-	{
-		if(isalpha(path[i]))
-		{
-			curPath = path[i];
-		}
-		else
-		{
-			return 0;
-		}
-		for(int b = 0; b < 10; b++)
-		{
-			//if exists
-	      	if (curDI->name[b] == curPath && curDI->type[b] != 'c')
-			{
-				curAddr = newAddr;
-				newAddr = atoi(curDI->point[b]);
-				break;
-			}
-	    }
-
-		if(curAddr != newAddr)
-		{
-			myPM->readDiskBlock(newAddr, nextDI);
-			curDI = curDI->createdinode(nextDI);
-		}
-		else if(curDI->next[0] == 'c')
-		{
-			return -1;
-		}
-		else
-		{
-			newAddr = atoi(curDI->next);
-			curAddr = newAddr;
-			myPM->readDiskBlock(curAddr, nextDI);
-			curDI = curDI->createdinode(nextDI);
-		}
-		i+=2;
-	}
+	return 0;
 }
