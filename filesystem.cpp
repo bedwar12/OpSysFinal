@@ -624,7 +624,7 @@ while(rw < 3*64 && rw < lastByte)
 	while(rw < lastByte)
 	{
 			// if the block is unallocated, allocate one
-			if(myII>addr[currentBlock][0] == 'c')
+			if(myII->addr[currentBlock][0] == 'c')
 			{
 					rwptr[fileDesc] = rw;
 					return dataIndex;  //end of written file
@@ -634,7 +634,7 @@ while(rw < 3*64 && rw < lastByte)
 			index = rw % 64;
 
 			// read in current block
-			myPM->readDiskBlock(atoi(myII-addr[currentBlock]),buffer);
+			myPM->readDiskBlock(atoi(myII->addr[currentBlock]),buffer);
 
 			// write the rest of currentBlock
 			while(index < 64 && rw < lastByte){
@@ -740,7 +740,7 @@ while(rw < 3*64 && rw < lastByte)
 	while(rw < lastByte)
 	{
 			// if the block is unallocated, allocate one
-			if(myII>addr[currentBlock][0] == 'c')
+			if(myII->addr[currentBlock][0] == 'c')
 			{
 					int tmp = myPM->getFreeDiskBlock();
 
@@ -751,7 +751,7 @@ while(rw < 3*64 && rw < lastByte)
 			index = rw % 64;
 
 			// read in current block
-			myPM->readDiskBlock(atoi(myII-addr[currentBlock]),buffer);
+			myPM->readDiskBlock(atoi(myII->addr[currentBlock]),buffer);
 
 			// write the rest of currentBlock
 			while(index < 64 && rw < lastByte){
@@ -941,6 +941,50 @@ int FileSystem::isOpen ( int fileDesc )
 	}
 	return -1;
 }
+
+
+/* get inode for a file */
+/*
+int FileSystem::getFileInode(char *filename, int fnameLen)
+{
+  return getInode(filename,fnameLen,0);
+}
+*/
+
+/*get inode for a directory */
+/*
+int FileSystem::getDirectoryInode(char *filename, int fnameLen)
+{
+  return getInode(filename,fnameLen,1);
+}
+*/
+
+
+int FileSystem::validName(char* name, int length)
+{
+	for(int i=0; i < length; i++)
+	{
+		if(i%2 == 0)
+		{
+			if(name[i] != '/')
+			{
+				return 0;
+			}
+		}
+		else
+		{
+			if(!isalpha(name[i]))
+			{
+				return 0;
+			}
+		}
+	}
+	return 1;
+}
+
+
+
+
 
 int FileSystem::findBlockNum(char* path, int &curAddr, int &newAddr)
 {
