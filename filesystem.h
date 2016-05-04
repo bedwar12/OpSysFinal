@@ -252,14 +252,16 @@ class FileSystem {
   int myfileSystemSize;
   PartitionManager *myPM;
   dinode *myDI;
-  char openNames[100][64];
-  char myMode[100];
-  int fdesc[100];
-  int rwptr[100];
+  map<int,char *> openNames;
+  map<int,char> myMode;
+  map<int,int> rwptr;
+  //char openNames[100][64];
+  //char myMode[100];
+  int fdesc;
+  
 
   /* declare other private members here */
 	void deleteIInode(int blknum);
-	int getFileInode(char *filename, int fnameLen);
 
   public:
     FileSystem(DiskManager *dm, char fileSystemName);

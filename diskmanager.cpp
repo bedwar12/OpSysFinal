@@ -5,59 +5,59 @@ using namespace std;
 
 DiskManager::DiskManager(Disk *d, int partcount, DiskPartition *dp)
 {
-  myDisk = d;
-     partCount= partcount;
-     int r = myDisk->initDisk();
-     char buffer[64];
+    myDisk = d;
+    partCount= partcount;
+    int r = myDisk->initDisk();
+    char buffer[64];
 
-     // initialize buffer to 'c'
-      myDisk-> readDiskBlock(0,buffer);
+    // initialize buffer to 'c'
+     myDisk-> readDiskBlock(0,buffer);
+    
+    /* If needed, initialize the disk to keep partition information */
+    diskPart = new DiskPartition[partCount];
+	if ( r == 1 )
+	{
+		//set the diskPartition to the partition passed
+		diskPart = dp;
 
-     /* If needed, initialize the disk to keep partition information */
-     diskPart = new DiskPartition[partCount];
-   if ( r == 1 )
-   {
-     //set the diskPartition to the partition passed
-     diskPart = dp;
+		//write superblock(meta data of meta data)
+		//char superBlockFiller[64];
 
-     //write superblock(meta data of meta data)
-     //char superBlockFiller[64];
+		for( int i = 0; i < partCount; i++ )
+		{
+			sprintf( buffer + i*5, "%c", diskPart[i].partitionName );
+			sprintf( buffer + (i*5) + 1, "%c", diskPart[i].partitionSize );
+		}
+		myDisk -> writeDiskBlock( 0, buffer );
+	}
+    /* else  read back the partition information from the DISK1 */
+	else
+	{
+		printf("%s\n", "You are in the read super block section");
 
-     for( int i = 0; i < partCount; i++ )
-     {
-       sprintf( buffer + i*5, "%c", diskPart[i].partitionName );
-       sprintf( buffer + (i*5) + 1, "%c", diskPart[i].partitionSize );
-     }
-     myDisk -> writeDiskBlock( 0, buffer );
-   }
-     /* else  read back the partition information from the DISK1 */
-   else
-   {
-     printf("%s\n", "You are in the read super block section");
-
-     char size[5];
-     char partName;
-     int index = 0;
-     int offset;
-         myDisk -> readDiskBlock( 0, buffer );
-     while(1)
-     {
-       partName = buffer[ index * 5 ];
-       if( partName == 'c' )
-       {
-         break;
-       }
-       // set partition name
-       diskPart[index].partitionName = partName;
-       offset = 1 + ( 5 * index );
-       //copy size
-       strncpy( size, buffer + offset, 4 );
-       //printf("size is %d\n", size);
-       //set partition size
-       diskPart[index].partitionSize = atoi( size );
-       index++;
-     }
-   }
+		char size[5];
+		char partName;
+		int index = 0;
+		int offset;
+        myDisk -> readDiskBlock( 0, buffer );
+		while(1)
+		{
+			partName = buffer[ index * 5 ];
+			if( partName == 'c' )
+			{
+				break;
+			}
+			// set partition name
+			diskPart[index].partitionName = partName;
+			offset = 1 + ( 5 * index );
+			//copy size
+			strncpy( size, buffer + offset, 4 );
+			//printf("size is %d\n", size);
+			//set partition size
+			diskPart[index].partitionSize = atoi( size );
+			index++;
+		}
+	}
 
 }
 
