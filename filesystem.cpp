@@ -982,6 +982,46 @@ int FileSystem::validName(char* name, int length)
 	return 1;
 }
 
+int FileSystem::doesExist(char *fname)
+{
+	int r, addr1, addr2;
+	r = findBlockNum(fname, addr1, addr2);
+	if(r == 0)
+	{
+		// already exists
+		return -1;
+	}
+	else {
+		return 0;
+	}
+}
+
+void FileSystem::deleteIInode(int blknum)
+{
+	char buf[65];
+	int delBlk;
+	myPM->readDiskBlock(blknum, buf);
+	iinode *myII = new iinode();
+	myII = myII->createiinode(buf);
+	for(int i = 0; i < 16; i++)
+	{
+		if(myII->addr[i][0] != 'c')
+		{
+			delBlk = atoi(myII->addr[i]);
+			myPM->returnDiskBlock(delBlk);
+		}
+	}
+}
+
+
+int FileSystem::isLocked(char *filename){
+
+    if(myLockTable.find(filename) == myLockTable.end())
+        return 0;// file is unlocked return false
+    else
+        return 1;// file is locked return true
+}
+
 
 
 
