@@ -524,7 +524,19 @@ int FileSystem::openFile(char *filename, int fnameLen, char mode, int lockId)
 }
 int FileSystem::closeFile(int fileDesc)
 {
-	return 0;
+	for (int i = 0; i < 100; i++)
+	{
+		if(fdesc[i] == fileDesc)
+		{
+			memset(openNames[i], 0, 64);
+			fdesc[i] = -1;
+			myMode[i] = 0;
+			rwptr[i] = -1;
+			return 0;
+		}
+
+	}
+	return -1;
 }
 int FileSystem::readFile(int fileDesc, char *data, int len)
 {
@@ -612,7 +624,7 @@ while(rw < 3*64 && rw < lastByte)
 	while(rw < lastByte)
 	{
 			// if the block is unallocated, allocate one
-			if(myII>addr[currentBlock][0] == 'c')
+			if(myII->addr[currentBlock][0] == 'c')
 			{
 					rwptr[fileDesc] = rw;
 					return dataIndex;  //end of written file
@@ -622,7 +634,7 @@ while(rw < 3*64 && rw < lastByte)
 			index = rw % 64;
 
 			// read in current block
-			myPM->readDiskBlock(atoi(myII-addr[currentBlock]),buffer);
+			myPM->readDiskBlock(atoi(myII->addr[currentBlock]),buffer);
 
 			// write the rest of currentBlock
 			while(index < 64 && rw < lastByte){
@@ -728,7 +740,7 @@ while(rw < 3*64 && rw < lastByte)
 	while(rw < lastByte)
 	{
 			// if the block is unallocated, allocate one
-			if(myII>addr[currentBlock][0] == 'c')
+			if(myII->addr[currentBlock][0] == 'c')
 			{
 					int tmp = myPM->getFreeDiskBlock();
 
@@ -739,7 +751,7 @@ while(rw < 3*64 && rw < lastByte)
 			index = rw % 64;
 
 			// read in current block
-			myPM->readDiskBlock(atoi(myII-addr[currentBlock]),buffer);
+			myPM->readDiskBlock(atoi(myII->addr[currentBlock]),buffer);
 
 			// write the rest of currentBlock
 			while(index < 64 && rw < lastByte){
@@ -816,7 +828,7 @@ int FileSystem::seekFile(int fileDesc, int offset, int flag)
 
 	// find desired rw
 	int rw;
-	if( flag = 0 )
+	if( flag == 0 )
 	{
 		rw = rwptr[index] + offset;
 	}
@@ -843,11 +855,50 @@ int FileSystem::seekFile(int fileDesc, int offset, int flag)
 }
 int FileSystem::renameFile(char *filename1, int fnameLen1, char *filename2, int fnameLen2)
 {
-	return 0;
+	/*int inode = getFileInode(filename1,fnameLen1);
+  char filetype = 0;//working with files/directories.
+  if(inode == -4)
+  {
+   inode = getDirectoryInode(filename1,fnameLen1);
+   filetype = 1;//renaming directories
+  }
+  if(inode1 < 0)return -2;//file does not exist
+  int inode2 = getInode(filename2,fnameLen2,filetype);
+  //cerr << "inode2 = " << inode2 << endl;
+  if(inode2>=0) return -3;//destination exists
+  if(inode2==-4) return -3;//destination exists as opposite filetype
+  if(inode2<-1) return -1;//invalid filename
+  for(int i = 0; i < (int)fileDescriptors.size(); ++i)
+  {
+   if(fileDescriptors[i].file_inode_block == inode1)return -4;
+  }
+  for(int i = 0; i < (int)fileLocks.size(); ++i)
+  {
+   if(fileLocks[i].file_inode_block == inode1)return -4;
+  }
+
+
+  int f1DirNode = getDirectoryInode(filename1,fnameLen1-2);
+  int f2DirNode = getDirectoryInode(filename2,fnameLen2-2);
+  if(f2DirNode < 0) return -5; //destination directory does not exist
+
+  removeFileFromDirectory(filename1[fnameLen1-1],f1DirNode);
+  putFileInDirectory(filename2[fnameLen2-1],inode1,filetype,f2DirNode);
+  cleanDirectory(f1DirNode);
+
+  if(filetype == 0)//change filename in inode for regular files
+  {
+   char inodeBuff[myDM->getBlockSize()];
+   myPM->readDiskBlock(inode1,inodeBuff);
+   inodeBuff[0] = filename2[fnameLen2-1];
+   myPM->writeDiskBlock(inode1,inodeBuff);
+  }
+  return 0;
+	*/
 }
 int FileSystem::getAttribute(char *filename, int fnameLen /* ... and other parameters as needed */)
 {
-	int inode = getFileInode(filename,fnameLen);
+	/*int inode = getFileInode(filename,fnameLen);
 	if(inode == -1) return inode;//file not found
 	if(inode < 0) return -3;//other error
 	char inodeBuff[myDM->getBlockSize()];
@@ -855,10 +906,11 @@ int FileSystem::getAttribute(char *filename, int fnameLen /* ... and other param
 	readCount = readIntFromBuffer(inodeBuff+22);
 	writeCount = readIntFromBuffer(inodeBuff+26);
 	return 0;
+	*/
 }
 int setAttribute(char *filename, int fnameLen /* ... and other parameters as needed */)
 {
-	int inode = getFileInode(filename,fnameLen);
+	/*int inode = getFileInode(filename,fnameLen);
 	if(inode == -1) return inode;//file not found
 	if(inode < 0) return -3;//other error
 	for(int i = 0; i < (int)fileDescriptors.size(); ++i)
@@ -875,9 +927,10 @@ int setAttribute(char *filename, int fnameLen /* ... and other parameters as nee
 	writeIntToBuffer(inodeBuff+26,writeCount);
 	myPM->writeDiskBlock(inode,inodeBuff);
 	return 0;
+	*/
 }
 
-int File:System::isOpen ( int fileDesc )
+int FileSystem::isOpen ( int fileDesc )
 {
 	for ( int i = 0; i < 100; i++ )
 	{
@@ -888,6 +941,50 @@ int File:System::isOpen ( int fileDesc )
 	}
 	return -1;
 }
+
+
+/* get inode for a file */
+/*
+int FileSystem::getFileInode(char *filename, int fnameLen)
+{
+  return getInode(filename,fnameLen,0);
+}
+*/
+
+/*get inode for a directory */
+/*
+int FileSystem::getDirectoryInode(char *filename, int fnameLen)
+{
+  return getInode(filename,fnameLen,1);
+}
+*/
+
+
+int FileSystem::validName(char* name, int length)
+{
+	for(int i=0; i < length; i++)
+	{
+		if(i%2 == 0)
+		{
+			if(name[i] != '/')
+			{
+				return 0;
+			}
+		}
+		else
+		{
+			if(!isalpha(name[i]))
+			{
+				return 0;
+			}
+		}
+	}
+	return 1;
+}
+
+
+
+
 
 int FileSystem::findBlockNum(char* path, int &curAddr, int &newAddr)
 {

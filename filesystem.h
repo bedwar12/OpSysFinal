@@ -259,6 +259,7 @@ class FileSystem {
 
   /* declare other private members here */
 	void deleteIInode(int blknum);
+	int getFileInode(char *filename, int fnameLen);
 
   public:
     FileSystem(DiskManager *dm, char fileSystemName);
